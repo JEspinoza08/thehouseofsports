@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   Clock3,
   ExternalLink,
   FileText,
+  Download,
   Package,
   RefreshCw,
   Phone,
@@ -12,6 +15,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
+import { exportRowsToExcel } from "../../lib/exportExcel";
 
 const statuses = [
   "pendiente",
@@ -50,6 +54,7 @@ export default function AdminOrders() {
   const [retryingInvoiceId, setRetryingInvoiceId] = useState<string | null>(null);
   const [orderSearch, setOrderSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("todos");
+  const [expandedOrders, setExpandedOrders] = useState<Set<string>>(new Set());
 
   const loadOrders = async () => {
     setLoading(true);
@@ -271,6 +276,55 @@ export default function AdminOrders() {
     return fullOrderId.includes(normalizedOrderSearch) || shortOrderId.includes(normalizedOrderSearch);
   });
 
+  const toggleOrderExpanded = (orderId: string) => {
+    setExpandedOrders((current) => {
+      const next = new Set(current);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
+
+  const handleExportSales = () => {
+    const rows = filteredOrders.flatMap((order) => {
+      const items = order.order_items?.length ? order.order_items : [null];
+
+      return items.map((item: any) => ({
+        "N° Pedido": String(order.id).slice(0, 8).toUpperCase(),
+        Fecha: new Date(order.created_at).toLocaleString("es-PE"),
+        Canal: order.sales_channel === "store" ? "Tienda física" : "Online",
+        "Estado pedido": order.status,
+        "Estado pago": paymentLabels[order.payment_status || "pending"] || order.payment_status || "Pendiente",
+        "Método pago": formatPaymentMethod(order.payment_method),
+        "Proveedor pago": order.payment_provider || "",
+        "ID transacción": order.payment_transaction_id || "",
+        Cliente: order.customer_name || "",
+        DNI: order.customer_dni || "",
+        Teléfono: order.customer_phone || "",
+        Dirección: order.customer_address || "",
+        Distrito: order.customer_district || "",
+        Provincia: order.customer_province || "",
+        Departamento: order.customer_department || "",
+        Producto: item?.product_name || "",
+        Variante: item
+          ? [item.variant_type, item.variant_value].filter(Boolean).join(": ") || "Sin variante"
+          : "",
+        Cantidad: Number(item?.quantity || 0),
+        "Precio unitario": Number(item?.unit_price || 0),
+        "Subtotal ítem": Number(item?.subtotal || 0),
+        "Subtotal pedido": Number(order.subtotal || 0),
+        Envío: Number(order.shipping_cost || 0),
+        Total: Number(order.total || 0),
+      }));
+    });
+
+    exportRowsToExcel(
+      rows,
+      `ths-ventas-${new Date().toISOString().slice(0, 10)}`,
+      "Ventas",
+    );
+  };
+
   if (loading) {
     return (
       <div className="flex min-h-[300px] items-center justify-center">
@@ -353,6 +407,15 @@ export default function AdminOrders() {
 
           <button
             type="button"
+            onClick={handleExportSales}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/20"
+          >
+            <Download size={17} />
+            Exportar Excel
+          </button>
+
+          <button
+            type="button"
             onClick={loadOrders}
             className="rounded-xl border border-white/10 bg-zinc-900 px-4 py-3 text-sm font-bold text-white transition hover:bg-zinc-800"
           >
@@ -371,63 +434,85 @@ export default function AdminOrders() {
         </div>
       )}
 
-      <div className="space-y-5">
+      <div className="space-y-3">
         {filteredOrders.map((order) => {
           const paymentStatus = order.payment_status || "pending";
           const installments = Number(order.installments || 1);
+          const isExpanded = expandedOrders.has(order.id);
+          const itemCount = (order.order_items || []).reduce(
+            (sum: number, item: any) => sum + Number(item.quantity || 0),
+            0,
+          );
 
           return (
             <article
               key={order.id}
-              className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-900 shadow-[0_18px_60px_rgba(0,0,0,.18)] transition hover:border-white/20"
+              className={`overflow-hidden rounded-2xl border bg-zinc-900 transition ${
+                isExpanded
+                  ? "border-white/20 shadow-[0_18px_60px_rgba(0,0,0,.18)]"
+                  : "border-white/10 hover:border-white/20"
+              }`}
             >
-              <div className="border-b border-white/10 bg-gradient-to-r from-white/[.035] to-transparent p-5">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-base font-black text-white">
-                        Pedido #{order.id.slice(0, 8).toUpperCase()}
-                      </p>
+              <div className="p-4 md:p-5">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+                  <button
+                    type="button"
+                    onClick={() => toggleOrderExpanded(order.id)}
+                    className="group flex min-w-0 flex-1 items-start gap-3 text-left"
+                    aria-expanded={isExpanded}
+                    title={isExpanded ? "Contraer pedido" : "Ver detalle del pedido"}
+                  >
+                    <span className={`mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition ${
+                      isExpanded
+                        ? "border-[#e3262e]/30 bg-[#e3262e]/10 text-[#ff5c63]"
+                        : "border-white/10 bg-white/5 text-zinc-400 group-hover:text-white"
+                    }`}>
+                      {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                    </span>
 
-                      <span
-                        className={`rounded-full border px-3 py-1 text-xs font-black uppercase ${paymentStatusStyles[paymentStatus] ||
-                          paymentStatusStyles.pending
-                          }`}
-                      >
-                        {paymentLabels[paymentStatus] || paymentStatus}
-                      </span>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-base font-black text-white">
+                          Pedido #{order.id.slice(0, 8).toUpperCase()}
+                        </p>
 
-                      <span
-                        className={`rounded-full border px-3 py-1 text-xs font-black uppercase ${orderStatusStyles[order.status] ||
-                          orderStatusStyles.pendiente
-                          }`}
-                      >
-                        {order.status}
-                      </span>
+                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${
+                          paymentStatusStyles[paymentStatus] || paymentStatusStyles.pending
+                        }`}>
+                          {paymentLabels[paymentStatus] || paymentStatus}
+                        </span>
 
-                      <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-black uppercase text-zinc-300">
-                        {order.sales_channel === "store" ? "Tienda física" : "Online"}
-                      </span>
+                        <span className={`rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${
+                          orderStatusStyles[order.status] || orderStatusStyles.pendiente
+                        }`}>
+                          {order.status}
+                        </span>
+                      </div>
+
+                      <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-500">
+                        <span className="font-semibold text-zinc-300">{order.customer_name || "Cliente"}</span>
+                        <span>{new Date(order.created_at).toLocaleString("es-PE", { dateStyle: "medium", timeStyle: "short" })}</span>
+                        <span>{order.sales_channel === "store" ? "Tienda física" : "Online"}</span>
+                        <span>{itemCount} {itemCount === 1 ? "producto" : "productos"}</span>
+                      </div>
                     </div>
+                  </button>
 
-                    <p className="mt-2 text-sm text-gray-400">
-                      {new Date(order.created_at).toLocaleString("es-PE", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
-                    </p>
-                  </div>
-
-                  <div className="w-full lg:w-auto">
-                    <label className="mb-1 block text-xs font-bold uppercase text-gray-500">
-                      Estado del pedido
-                    </label>
+                  <div className="flex items-center gap-3 pl-12 xl:pl-0">
+                    <div className="min-w-[110px] text-left xl:text-right">
+                      <p className="text-[10px] font-black uppercase tracking-wide text-zinc-500">Total</p>
+                      <p className="mt-0.5 text-lg font-black text-white">
+                        S/ {Number(order.total || 0).toLocaleString("es-PE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </p>
+                    </div>
 
                     <select
                       value={order.status}
                       disabled={updatingId === order.id}
+                      onClick={(e) => e.stopPropagation()}
                       onChange={(e) => updateStatus(order.id, e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-zinc-800 px-4 py-3 text-sm font-bold text-white outline-none disabled:cursor-wait disabled:opacity-50 lg:min-w-[190px]"
+                      className="min-w-[155px] rounded-xl border border-white/10 bg-zinc-800 px-3 py-2.5 text-xs font-black uppercase text-white outline-none transition focus:border-[#e3262e] disabled:cursor-wait disabled:opacity-50"
+                      aria-label={`Estado del pedido ${order.id.slice(0, 8)}`}
                     >
                       {statuses.map((status) => (
                         <option key={status} value={status}>
@@ -439,290 +524,138 @@ export default function AdminOrders() {
                 </div>
               </div>
 
-              <div className="grid gap-5 p-5 lg:grid-cols-2">
-                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                  <h3 className="text-sm font-black uppercase text-white">
-                    Datos del cliente
-                  </h3>
-
-                  <div className="mt-4 space-y-3 text-sm">
-                    <p className="font-bold text-white">
-                      {order.customer_name}
-                    </p>
-                    {order.customer_dni && (
-                      <p className="text-gray-300">
-                        DNI:{" "}
-                        <span className="font-bold text-white">
-                          {order.customer_dni}
-                        </span>
-                      </p>
-                    )}
-
-                    <div className="flex items-start gap-2 text-gray-300">
-                      <Phone className="mt-0.5 shrink-0" size={16} />
-                      <span>{order.customer_phone}</span>
-                    </div>
-
-                    <div className="flex items-start gap-2 text-gray-300">
-                      <MapPin className="mt-0.5 shrink-0" size={16} />
-                      <span>
-                        {order.customer_address}
-                        {order.customer_district
-                          ? `, ${order.customer_district}`
-                          : ""}
-                        {order.customer_province
-                          ? `, ${order.customer_province}`
-                          : ""}
-                        {order.customer_department
-                          ? `, ${order.customer_department}`
-                          : ""}
-                      </span>
-                    </div>
-
-                    {order.customer_zone && (
-                      <p className="text-gray-300">
-                        Zona:{" "}
-                        <span className="font-bold text-white">
-                          {order.customer_zone}
-                        </span>
-                      </p>
-                    )}
-
-                    {order.customer_reference && (
-                      <p className="text-gray-300">
-                        Referencia:{" "}
-                        <span className="text-white">
-                          {order.customer_reference}
-                        </span>
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-black uppercase text-white">
-                      Información del pago
-                    </h3>
-
-                    {paymentStatus === "paid" ? (
-                      <CheckCircle2 className="text-emerald-400" size={21} />
-                    ) : paymentStatus === "failed" ? (
-                      <XCircle className="text-red-400" size={21} />
-                    ) : (
-                      <Clock3 className="text-amber-400" size={21} />
-                    )}
-                  </div>
-
-                  <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
-                    <PaymentField
-                      label="Método"
-                      value={formatPaymentMethod(order.payment_method)}
-                    />
-
-                    <PaymentField
-                      label="Proveedor"
-                      value={order.payment_provider?.toUpperCase() || "—"}
-                    />
-
-                    <PaymentField
-                      label="Tarjeta"
-                      value={order.card_brand || "—"}
-                    />
-
-                    <PaymentField
-                      label="Cuotas"
-                      value={
-                        installments > 1
-                          ? `${installments} cuotas`
-                          : "Sin cuotas"
-                      }
-                    />
-
-                    <PaymentField
-                      label="Referencia"
-                      value={order.payment_reference || "—"}
-                    />
-
-                    <PaymentField
-                      label="Fecha de pago"
-                      value={
-                        order.paid_at
-                          ? new Date(order.paid_at).toLocaleString("es-PE", {
-                            dateStyle: "short",
-                            timeStyle: "short",
-                          })
-                          : "—"
-                      }
-                    />
-                  </div>
-
-                  {order.payment_transaction_id && (
-                    <div className="mt-4 rounded-xl border border-white/10 bg-zinc-950 p-3">
-                      <p className="text-xs font-bold uppercase text-gray-500">
-                        ID de transacción
-                      </p>
-
-                      <div className="mt-1 flex items-center justify-between gap-3">
-                        <code className="break-all text-xs text-gray-300">
-                          {order.payment_transaction_id}
-                        </code>
-
-                        <button
-                          type="button"
-                          onClick={() =>
-                            navigator.clipboard.writeText(
-                              order.payment_transaction_id,
-                            )
-                          }
-                          className="shrink-0 rounded-lg border border-white/10 p-2 text-gray-400 transition hover:text-white"
-                          title="Copiar ID"
-                        >
-                          <ExternalLink size={15} />
-                        </button>
+              {isExpanded && (
+                <div className="border-t border-white/10 bg-black/10">
+                  <div className="grid gap-4 p-4 md:p-5 xl:grid-cols-3">
+                    <section className="rounded-xl border border-white/10 bg-black/20 p-4">
+                      <h3 className="text-xs font-black uppercase tracking-wide text-zinc-400">Datos del cliente</h3>
+                      <div className="mt-3 space-y-2.5 text-sm">
+                        <p className="font-black text-white">{order.customer_name}</p>
+                        {order.customer_dni && <p className="text-zinc-400">DNI: <span className="font-bold text-white">{order.customer_dni}</span></p>}
+                        {order.customer_phone && (
+                          <div className="flex items-start gap-2 text-zinc-300"><Phone className="mt-0.5 shrink-0 text-zinc-500" size={15}/><span>{order.customer_phone}</span></div>
+                        )}
+                        {(order.customer_address || order.customer_district) && (
+                          <div className="flex items-start gap-2 text-zinc-300">
+                            <MapPin className="mt-0.5 shrink-0 text-zinc-500" size={15}/>
+                            <span>
+                              {order.customer_address}
+                              {order.customer_district ? `, ${order.customer_district}` : ""}
+                              {order.customer_province ? `, ${order.customer_province}` : ""}
+                              {order.customer_department ? `, ${order.customer_department}` : ""}
+                            </span>
+                          </div>
+                        )}
+                        {order.customer_zone && <p className="text-zinc-400">Zona: <span className="font-bold text-white">{order.customer_zone}</span></p>}
+                        {order.customer_reference && <p className="text-xs leading-5 text-zinc-500">Ref.: {order.customer_reference}</p>}
                       </div>
-                    </div>
-                  )}
-                </div>
+                    </section>
 
-                <div className="rounded-xl border border-white/10 bg-black/20 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="flex items-center gap-2">
-                      <FileText size={20} className="text-[#e3262e]" />
-                      <div>
-                        <h3 className="text-sm font-black uppercase text-white">Comprobante electrónico</h3>
-                        <p className="mt-1 text-xs text-gray-500">NubeFact · {order.electronic_document?.nubefact_mode?.toUpperCase() || "sin emitir"}</p>
+                    <section className="rounded-xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="text-xs font-black uppercase tracking-wide text-zinc-400">Pago</h3>
+                        {paymentStatus === "paid" ? <CheckCircle2 className="text-emerald-400" size={18}/> : paymentStatus === "failed" ? <XCircle className="text-red-400" size={18}/> : <Clock3 className="text-amber-400" size={18}/>}
                       </div>
-                    </div>
-
-                    {order.electronic_document && (
-                      <span className={`rounded-full border px-3 py-1 text-xs font-black uppercase ${
-                        order.electronic_document.status === "issued"
-                          ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
-                          : order.electronic_document.status === "pending"
-                            ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
-                            : "border-red-500/30 bg-red-500/10 text-red-400"
-                      }`}>
-                        {order.electronic_document.status}
-                      </span>
-                    )}
-                  </div>
-
-                  {order.electronic_document ? (
-                    <div className="mt-4">
-                      <p className="text-sm font-black text-white">
-                        {order.electronic_document.document_type === "factura" ? "Factura" : "Boleta"} {order.electronic_document.series}-{String(order.electronic_document.number).padStart(8, "0")}
-                      </p>
-                      {order.electronic_document.sunat_description && (
-                        <p className="mt-2 text-xs leading-5 text-gray-400">{order.electronic_document.sunat_description}</p>
+                      <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
+                        <PaymentField label="Método" value={formatPaymentMethod(order.payment_method)} />
+                        <PaymentField label="Proveedor" value={order.payment_provider?.toUpperCase() || "—"} />
+                        <PaymentField label="Tarjeta" value={order.card_brand || "—"} />
+                        <PaymentField label="Cuotas" value={installments > 1 ? `${installments} cuotas` : "Sin cuotas"} />
+                        <PaymentField label="Referencia" value={order.payment_reference || "—"} />
+                        <PaymentField label="Fecha" value={order.paid_at ? new Date(order.paid_at).toLocaleString("es-PE", { dateStyle: "short", timeStyle: "short" }) : "—"} />
+                      </div>
+                      {order.payment_transaction_id && (
+                        <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-zinc-950 px-3 py-2">
+                          <code className="truncate text-[11px] text-zinc-500">{order.payment_transaction_id}</code>
+                          <button type="button" onClick={() => navigator.clipboard.writeText(order.payment_transaction_id)} className="shrink-0 text-zinc-500 transition hover:text-white" title="Copiar ID"><ExternalLink size={14}/></button>
+                        </div>
                       )}
-                      {order.electronic_document.error_message && (
-                        <p className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-xs text-red-300">
-                          {order.electronic_document.error_message}
-                        </p>
-                      )}
+                    </section>
 
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {order.electronic_document.nubefact_pdf_url && (
-                          <a href={order.electronic_document.nubefact_pdf_url} target="_blank" rel="noreferrer" className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/10">Ver PDF</a>
-                        )}
-                        {order.electronic_document.nubefact_xml_url && (
-                          <a href={order.electronic_document.nubefact_xml_url} target="_blank" rel="noreferrer" className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/10">XML</a>
-                        )}
-                        {order.electronic_document.nubefact_cdr_url && (
-                          <a href={order.electronic_document.nubefact_cdr_url} target="_blank" rel="noreferrer" className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-white hover:bg-white/10">CDR</a>
-                        )}
-                        {order.electronic_document.status !== "issued" && order.payment_status === "paid" && (
-                          <button type="button" onClick={() => retryInvoice(order.id)} disabled={retryingInvoiceId === order.id} className="inline-flex items-center gap-2 rounded-lg bg-[#e3262e] px-3 py-2 text-xs font-black text-white disabled:opacity-50">
-                            <RefreshCw size={14} className={retryingInvoiceId === order.id ? "animate-spin" : ""} />
-                            {retryingInvoiceId === order.id ? "Reintentando" : "Reintentar emisión"}
-                          </button>
+                    <section className="rounded-xl border border-white/10 bg-black/20 p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <FileText size={17} className="text-[#e3262e]"/>
+                          <h3 className="text-xs font-black uppercase tracking-wide text-zinc-400">Comprobante</h3>
+                        </div>
+                        {order.electronic_document && (
+                          <span className={`rounded-full border px-2 py-1 text-[10px] font-black uppercase ${
+                            order.electronic_document.status === "issued"
+                              ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400"
+                              : order.electronic_document.status === "pending"
+                                ? "border-amber-500/30 bg-amber-500/10 text-amber-400"
+                                : "border-red-500/30 bg-red-500/10 text-red-400"
+                          }`}>{order.electronic_document.status}</span>
                         )}
                       </div>
-                    </div>
-                  ) : (
-                    <p className="mt-4 text-sm text-gray-400">Este pedido todavía no tiene comprobante electrónico registrado.</p>
-                  )}
-                </div>
-              </div>
 
-              <div className="border-t border-white/10 p-5">
-                <h3 className="mb-4 text-sm font-black uppercase text-white">
-                  Productos
-                </h3>
-
-                <div className="space-y-3">
-                  {order.order_items?.map((item: any) => (
-                    <div
-                      key={item.id}
-                      className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/20 p-3"
-                    >
-                      <div className="flex min-w-0 items-center gap-3">
-                        <img
-                          src={
-                            item.products?.image_url ||
-                            "/placeholder-product.png"
-                          }
-                          alt={item.product_name}
-                          className="h-14 w-14 shrink-0 rounded-lg bg-white object-contain"
-                        />
-
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-bold text-white">
-                            {item.product_name}
+                      {order.electronic_document ? (
+                        <div className="mt-3">
+                          <p className="text-sm font-black text-white">
+                            {order.electronic_document.document_type === "factura" ? "Factura" : "Boleta"} {order.electronic_document.series}-{String(order.electronic_document.number).padStart(8, "0")}
                           </p>
+                          <p className="mt-1 text-[11px] uppercase text-zinc-600">NubeFact · {order.electronic_document.nubefact_mode?.toUpperCase() || "—"}</p>
+                          {order.electronic_document.sunat_description && <p className="mt-2 line-clamp-2 text-xs leading-5 text-zinc-500">{order.electronic_document.sunat_description}</p>}
+                          {order.electronic_document.error_message && <p className="mt-2 rounded-lg border border-red-500/20 bg-red-500/10 p-2 text-xs text-red-300">{order.electronic_document.error_message}</p>}
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {order.electronic_document.nubefact_pdf_url && <a href={order.electronic_document.nubefact_pdf_url} target="_blank" rel="noreferrer" className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-white/10">PDF</a>}
+                            {order.electronic_document.nubefact_xml_url && <a href={order.electronic_document.nubefact_xml_url} target="_blank" rel="noreferrer" className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-white/10">XML</a>}
+                            {order.electronic_document.nubefact_cdr_url && <a href={order.electronic_document.nubefact_cdr_url} target="_blank" rel="noreferrer" className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] font-bold text-white hover:bg-white/10">CDR</a>}
+                            {order.electronic_document.status !== "issued" && order.payment_status === "paid" && (
+                              <button type="button" onClick={() => retryInvoice(order.id)} disabled={retryingInvoiceId === order.id} className="inline-flex items-center gap-1.5 rounded-lg bg-[#e3262e] px-2.5 py-1.5 text-[11px] font-black text-white disabled:opacity-50">
+                                <RefreshCw size={12} className={retryingInvoiceId === order.id ? "animate-spin" : ""}/>
+                                {retryingInvoiceId === order.id ? "Reintentando" : "Reintentar"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm text-zinc-500">Sin comprobante electrónico registrado.</p>
+                      )}
+                    </section>
+                  </div>
 
-                          <p className="mt-1 text-xs text-gray-400">
-                            Cantidad: {item.quantity}
-                            {item.variant_value
-                              ? ` · ${item.variant_type === "shoe_size" ? "Número" : "Talla"}: ${item.variant_value}`
-                              : ""}
-                          </p>
-                          {item.customization && (
-                            <p className="mt-1 text-xs font-semibold text-fuchsia-300">
-                              Personalización: {item.customization.summary || item.customization.option_label}
-                            </p>
-                          )}
+                  <div className="grid gap-4 border-t border-white/10 p-4 md:p-5 xl:grid-cols-[1fr_280px]">
+                    <section>
+                      <div className="mb-3 flex items-center justify-between">
+                        <h3 className="text-xs font-black uppercase tracking-wide text-zinc-400">Productos</h3>
+                        <span className="text-xs font-bold text-zinc-600">{itemCount} uds.</span>
+                      </div>
+                      <div className="space-y-2">
+                        {order.order_items?.map((item: any) => (
+                          <div key={item.id} className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-black/20 p-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <img src={item.products?.image_url || "/placeholder-product.png"} alt={item.product_name} className="h-11 w-11 shrink-0 rounded-lg bg-white object-contain"/>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-bold text-white">{item.product_name}</p>
+                                <p className="mt-0.5 text-xs text-zinc-500">
+                                  {item.quantity} ud.
+                                  {item.variant_value ? ` · ${item.variant_type === "shoe_size" ? "N°" : "Talla"} ${item.variant_value}` : ""}
+                                  {item.unit_price != null ? ` · S/ ${Number(item.unit_price).toLocaleString("es-PE")} c/u` : ""}
+                                </p>
+                                {item.customization && <p className="mt-1 truncate text-xs font-semibold text-fuchsia-300">Personalización: {item.customization.summary || item.customization.option_label}</p>}
+                              </div>
+                            </div>
+                            <strong className="shrink-0 text-sm text-white">S/ {Number(item.subtotal).toLocaleString("es-PE")}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </section>
 
-                          {item.unit_price != null && (
-                            <p className="mt-1 text-xs text-gray-500">
-                              S/{" "}
-                              {Number(item.unit_price).toLocaleString("es-PE")}{" "}
-                              c/u
-                            </p>
-                          )}
+                    <aside className="h-fit rounded-xl border border-white/10 bg-black/20 p-4">
+                      <p className="mb-3 text-xs font-black uppercase tracking-wide text-zinc-400">Resumen</p>
+                      <div className="space-y-2.5 text-sm">
+                        <TotalRow label="Subtotal" value={Number(order.subtotal || 0)} />
+                        <TotalRow label="Envío" value={Number(order.shipping_cost || 0)} />
+                        <div className="flex justify-between border-t border-white/10 pt-3">
+                          <span className="font-black text-white">Total</span>
+                          <strong className="text-lg text-white">S/ {Number(order.total || 0).toLocaleString("es-PE")}</strong>
                         </div>
                       </div>
-
-                      <strong className="shrink-0 text-sm text-white">
-                        S/ {Number(item.subtotal).toLocaleString("es-PE")}
-                      </strong>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="border-t border-white/10 bg-black/20 p-5">
-                <div className="ml-auto max-w-sm space-y-3">
-                  <TotalRow
-                    label="Subtotal"
-                    value={Number(order.subtotal || 0)}
-                  />
-
-                  <TotalRow
-                    label="Envío"
-                    value={Number(order.shipping_cost || 0)}
-                  />
-
-                  <div className="flex justify-between border-t border-white/10 pt-4">
-                    <span className="font-black text-white">Total</span>
-
-                    <strong className="text-xl text-white">
-                      S/ {Number(order.total || 0).toLocaleString("es-PE")}
-                    </strong>
+                    </aside>
                   </div>
                 </div>
-              </div>
+              )}
             </article>
           );
         })}

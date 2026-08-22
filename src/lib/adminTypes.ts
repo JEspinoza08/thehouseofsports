@@ -30,6 +30,7 @@ export type AdminCustomizationOption = {
 
 export type AdminProduct = {
   id: string;
+  sku_code: string;
   name: string;
   brand: string;
   category: string;

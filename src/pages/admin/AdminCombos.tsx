@@ -3,19 +3,355 @@ import { Edit3, ImagePlus, Plus, Save, Trash2 } from "lucide-react";
 import AdminNav from "../../components/AdminNav";
 import { supabase } from "../../lib/supabase";
 
-const slugify=(s:string)=>s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,"");
-const empty={id:"",title:"",slug:"",description:"",image_url:"",product_ids:[] as (string|number)[],combo_price:"",badge:"",is_active:true,sort_order:0};
+const slugify = (s: string) =>
+  s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+const empty = {
+  id: "",
+  title: "",
+  slug: "",
+  description: "",
+  image_url: "",
+  product_ids: [] as (string | number)[],
+  combo_price: "",
+  badge: "",
+  is_active: true,
+  sort_order: 0,
+};
 
-export default function AdminCombos(){
-  const [items,setItems]=useState<any[]>([]); const [products,setProducts]=useState<any[]>([]); const [form,setForm]=useState<any>(empty); const [open,setOpen]=useState(false); const [saving,setSaving]=useState(false); const [uploading,setUploading]=useState(false); const [query,setQuery]=useState("");
-  const load=async()=>{const [{data:c},{data:p}]=await Promise.all([supabase.from("product_combos").select("*").order("sort_order"),supabase.from("products").select("id,name,brand,category,price,image_url,is_active").eq("is_active",true).order("name")]);setItems(c??[]);setProducts(p??[]);}; useEffect(()=>{load();},[]);
-  const filtered=useMemo(()=>products.filter(p=>`${p.name} ${p.brand} ${p.category}`.toLowerCase().includes(query.toLowerCase())),[products,query]);
-  const toggleProduct=(id:any)=>setForm((f:any)=>({...f,product_ids:f.product_ids.some((x:any)=>String(x)===String(id))?f.product_ids.filter((x:any)=>String(x)!==String(id)):[...f.product_ids,id]}));
-  const upload=async(file:File)=>{setUploading(true);const ext=file.name.split(".").pop()||"webp";const path=`combos/${crypto.randomUUID()}.${ext}`;const {error}=await supabase.storage.from("productos").upload(path,file,{cacheControl:"3600"});if(error){setUploading(false);return alert(error.message)}const {data}=supabase.storage.from("productos").getPublicUrl(path);setForm((f:any)=>({...f,image_url:data.publicUrl}));setUploading(false)};
-  const save=async()=>{if(!form.title.trim())return alert("Ingresa un nombre para el combo.");if(form.product_ids.length<2)return alert("Selecciona al menos 2 productos.");setSaving(true);const payload={title:form.title.trim(),slug:form.slug.trim()||slugify(form.title),description:form.description.trim()||null,image_url:form.image_url.trim()||null,product_ids:form.product_ids,combo_price:form.combo_price===""?null:Number(form.combo_price),badge:form.badge.trim()||null,is_active:form.is_active,sort_order:Number(form.sort_order)||0,updated_at:new Date().toISOString()};const r=form.id?await supabase.from("product_combos").update(payload).eq("id",form.id):await supabase.from("product_combos").insert(payload);setSaving(false);if(r.error)return alert(r.error.message);setForm(empty);setOpen(false);load();};
-  const edit=(x:any)=>{setForm({...empty,...x,combo_price:x.combo_price??"",product_ids:Array.isArray(x.product_ids)?x.product_ids:[]});setOpen(true)}; const remove=async(id:any)=>{if(!confirm("¿Eliminar este combo?"))return;await supabase.from("product_combos").delete().eq("id",id);load()};
-  return <main className="min-h-screen bg-zinc-950 px-4 py-8 text-white xl:pl-[15.5rem]"><div className="mx-auto max-w-7xl"><div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs font-black uppercase tracking-[.18em] text-[#e3262e]">The House of Sports</p><h1 className="mt-2 text-3xl font-black">Combos THS</h1><p className="mt-2 text-sm text-zinc-400">Crea combinaciones reales de productos. Todo combo activo aparecerá automáticamente en el Home.</p></div><button onClick={()=>{setForm(empty);setOpen(true)}} className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#e3262e] px-4 py-3 text-sm font-black"><Plus size={17}/>Nuevo combo</button></div><AdminNav/>
-  {open&&<section className="mb-6 rounded-2xl border border-white/10 bg-zinc-900 p-5"><div className="flex items-center justify-between"><h2 className="text-lg font-black">{form.id?"Editar combo":"Nuevo combo"}</h2><button onClick={()=>setOpen(false)} className="text-sm text-zinc-400">Cerrar</button></div><div className="mt-4 grid gap-3 md:grid-cols-2"><input value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="Nombre: Guantes + Vendas" className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm outline-none focus:border-[#e3262e]"/><input value={form.slug} onChange={e=>setForm({...form,slug:e.target.value})} placeholder="Slug (opcional)" className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm outline-none focus:border-[#e3262e]"/><textarea value={form.description} onChange={e=>setForm({...form,description:e.target.value})} placeholder="Descripción del combo" className="min-h-24 rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm md:col-span-2"/><div className="flex gap-2"><input value={form.image_url} onChange={e=>setForm({...form,image_url:e.target.value})} placeholder="Imagen del combo" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm"/><label className="grid h-[46px] w-[46px] cursor-pointer place-items-center rounded-xl border border-white/10 bg-zinc-950"><ImagePlus size={18}/><input type="file" accept="image/*" className="hidden" onChange={e=>{const f=e.target.files?.[0];if(f)upload(f)}}/></label></div><input value={form.badge} onChange={e=>setForm({...form,badge:e.target.value})} placeholder="Etiqueta: Combo especial / Ahorra 15%" className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm"/><input type="number" min="0" step="0.01" value={form.combo_price} onChange={e=>setForm({...form,combo_price:e.target.value})} placeholder="Precio combo (opcional)" className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm"/><input type="number" value={form.sort_order} onChange={e=>setForm({...form,sort_order:e.target.value})} placeholder="Orden" className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm"/><label className="flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm"><input type="checkbox" checked={form.is_active} onChange={e=>setForm({...form,is_active:e.target.checked})}/>Activo</label></div>
-  <div className="mt-5"><div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between"><div><h3 className="font-black">Productos del combo</h3><p className="text-xs text-zinc-500">Seleccionados: {form.product_ids.length}. Puedes combinar zapatillas + medias, guantes + vendas, rodilleras + coderas, etc.</p></div><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar producto..." className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-sm"/></div><div className="mt-3 grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">{filtered.map(p=>{const checked=form.product_ids.some((x:any)=>String(x)===String(p.id));return <button type="button" key={p.id} onClick={()=>toggleProduct(p.id)} className={`flex items-center gap-3 rounded-xl border p-3 text-left ${checked?"border-[#e3262e] bg-[#e3262e]/10":"border-white/10 bg-zinc-950"}`}><img src={p.image_url||""} className="h-12 w-12 rounded-lg bg-white object-cover"/><div className="min-w-0"><p className="truncate text-sm font-black">{p.name}</p><p className="text-[10px] uppercase text-zinc-500">{p.brand} · {p.category}</p><p className="mt-1 text-xs font-bold">S/ {Number(p.price).toFixed(2)}</p></div></button>})}</div></div><div className="mt-5 flex gap-2"><button disabled={saving||uploading} onClick={save} className="inline-flex items-center gap-2 rounded-xl bg-[#e3262e] px-4 py-2.5 text-sm font-black"><Save size={16}/>{saving?"Guardando...":"Guardar combo"}</button></div></section>}
-  <section className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-900">{items.length===0?<p className="p-8 text-center text-zinc-500">No hay combos creados.</p>:<div className="divide-y divide-white/10">{items.map(c=><article key={c.id} className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"><div className="flex items-center gap-3">{c.image_url?<img src={c.image_url} className="h-16 w-24 rounded-lg object-cover"/>:<div className="h-16 w-24 rounded-lg bg-zinc-800"/>}<div><p className="text-[10px] font-black uppercase text-[#e3262e]">{c.is_active?"Activo":"Oculto"} · {Array.isArray(c.product_ids)?c.product_ids.length:0} productos</p><h3 className="mt-1 font-black">{c.title}</h3>{c.combo_price!=null&&<p className="mt-1 text-sm text-zinc-400">S/ {Number(c.combo_price).toFixed(2)}</p>}</div></div><div className="flex gap-2"><button onClick={()=>edit(c)} className="grid h-9 w-9 place-items-center rounded-lg border border-white/10"><Edit3 size={16}/></button><button onClick={()=>remove(c.id)} className="grid h-9 w-9 place-items-center rounded-lg border border-red-500/20 text-red-400"><Trash2 size={16}/></button></div></article>)}</div>}</section></div></main>;
+export default function AdminCombos() {
+  const [items, setItems] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [form, setForm] = useState<any>(empty);
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [query, setQuery] = useState("");
+  const load = async () => {
+    const [{ data: c }, { data: p }] = await Promise.all([
+      supabase.from("product_combos").select("*").order("sort_order"),
+      supabase
+        .from("products")
+        .select("id,name,brand,category,price,image_url,is_active")
+        .eq("is_active", true)
+        .order("name"),
+    ]);
+    setItems(c ?? []);
+    setProducts(p ?? []);
+  };
+  useEffect(() => {
+    load();
+  }, []);
+  const filtered = useMemo(
+    () =>
+      products.filter((p) =>
+        `${p.name} ${p.brand} ${p.category}`
+          .toLowerCase()
+          .includes(query.toLowerCase()),
+      ),
+    [products, query],
+  );
+  const toggleProduct = (id: any) =>
+    setForm((f: any) => ({
+      ...f,
+      product_ids: f.product_ids.some((x: any) => String(x) === String(id))
+        ? f.product_ids.filter((x: any) => String(x) !== String(id))
+        : [...f.product_ids, id],
+    }));
+  const upload = async (file: File) => {
+    setUploading(true);
+    const ext = file.name.split(".").pop() || "webp";
+    const path = `combos/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage
+      .from("productos")
+      .upload(path, file, { cacheControl: "3600" });
+    if (error) {
+      setUploading(false);
+      return alert(error.message);
+    }
+    const { data } = supabase.storage.from("productos").getPublicUrl(path);
+    setForm((f: any) => ({ ...f, image_url: data.publicUrl }));
+    setUploading(false);
+  };
+  const save = async () => {
+    if (!form.title.trim()) return alert("Ingresa un nombre para el combo.");
+    if (form.product_ids.length < 2)
+      return alert("Selecciona al menos 2 productos.");
+    setSaving(true);
+    const payload = {
+      title: form.title.trim(),
+      slug: form.slug.trim() || slugify(form.title),
+      description: form.description.trim() || null,
+      image_url: form.image_url.trim() || null,
+      product_ids: form.product_ids,
+      combo_price: form.combo_price === "" ? null : Number(form.combo_price),
+      badge: form.badge.trim() || null,
+      is_active: form.is_active,
+      sort_order: Number(form.sort_order) || 0,
+      updated_at: new Date().toISOString(),
+    };
+    const r = form.id
+      ? await supabase.from("product_combos").update(payload).eq("id", form.id)
+      : await supabase.from("product_combos").insert(payload);
+    setSaving(false);
+    if (r.error) return alert(r.error.message);
+    setForm(empty);
+    setOpen(false);
+    load();
+  };
+  const edit = (x: any) => {
+    setForm({
+      ...empty,
+      ...x,
+      combo_price: x.combo_price ?? "",
+      product_ids: Array.isArray(x.product_ids) ? x.product_ids : [],
+    });
+    setOpen(true);
+  };
+  const remove = async (id: any) => {
+    if (!confirm("¿Eliminar este combo?")) return;
+    await supabase.from("product_combos").delete().eq("id", id);
+    load();
+  };
+  return (
+    <main className="min-h-screen bg-zinc-950 px-4 py-8 text-white xl:pl-[15.5rem]">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase tracking-[.18em] text-[#e3262e]">
+              The House of Sports
+            </p>
+            <h1 className="mt-2 text-3xl font-black">Combos THS</h1>
+            <p className="mt-2 text-sm text-zinc-400">
+              Crea combinaciones reales de productos. Todo combo activo
+              aparecerá automáticamente en el Home.
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              setForm(empty);
+              setOpen(true);
+            }}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#e3262e] px-4 py-3 text-sm font-black"
+          >
+            <Plus size={17} />
+            Nuevo combo
+          </button>
+        </div>
+        <AdminNav />
+        {open && (
+          <section className="mb-6 rounded-2xl border border-white/10 bg-zinc-900 p-5">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-black">
+                {form.id ? "Editar combo" : "Nuevo combo"}
+              </h2>
+              <button
+                onClick={() => setOpen(false)}
+                className="text-sm text-zinc-400"
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <input
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="Nombre: Guantes + Vendas"
+                className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm outline-none focus:border-[#e3262e]"
+              />
+              <input
+                value={form.slug}
+                onChange={(e) => setForm({ ...form, slug: e.target.value })}
+                placeholder="Slug (opcional)"
+                className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm outline-none focus:border-[#e3262e]"
+              />
+              <textarea
+                value={form.description}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
+                placeholder="Descripción del combo"
+                className="min-h-24 rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm md:col-span-2"
+              />
+              <div className="flex gap-2">
+                <input
+                  value={form.image_url}
+                  onChange={(e) =>
+                    setForm({ ...form, image_url: e.target.value })
+                  }
+                  placeholder="Imagen del combo"
+                  className="min-w-0 flex-1 rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm"
+                />
+                <label className="grid h-[46px] w-[46px] cursor-pointer place-items-center rounded-xl border border-white/10 bg-zinc-950">
+                  <ImagePlus size={18} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) upload(f);
+                    }}
+                  />
+                </label>
+              </div>
+              <input
+                value={form.badge}
+                onChange={(e) => setForm({ ...form, badge: e.target.value })}
+                placeholder="Etiqueta: Combo especial / Ahorra 15%"
+                className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm"
+              />
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                value={form.combo_price}
+                onChange={(e) =>
+                  setForm({ ...form, combo_price: e.target.value })
+                }
+                placeholder="Precio combo (opcional)"
+                className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm"
+              />
+              <input
+                type="number"
+                value={form.sort_order}
+                onChange={(e) =>
+                  setForm({ ...form, sort_order: e.target.value })
+                }
+                placeholder="Orden"
+                className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm"
+              />
+              <label className="flex items-center gap-2 rounded-xl border border-white/10 bg-zinc-950 px-3 py-3 text-sm">
+                <input
+                  type="checkbox"
+                  checked={form.is_active}
+                  onChange={(e) =>
+                    setForm({ ...form, is_active: e.target.checked })
+                  }
+                />
+                Activo
+              </label>
+            </div>
+            <div className="mt-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h3 className="font-black">Productos del combo</h3>
+                  <p className="text-xs text-zinc-500">
+                    Seleccionados: {form.product_ids.length}. Puedes combinar
+                    zapatillas + medias, guantes + vendas, rodilleras + coderas,
+                    etc.
+                  </p>
+                </div>
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Buscar producto..."
+                  className="rounded-xl border border-white/10 bg-zinc-950 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="mt-3 grid max-h-72 gap-2 overflow-y-auto sm:grid-cols-2 lg:grid-cols-3">
+                {filtered.map((p) => {
+                  const checked = form.product_ids.some(
+                    (x: any) => String(x) === String(p.id),
+                  );
+                  return (
+                    <button
+                      type="button"
+                      key={p.id}
+                      onClick={() => toggleProduct(p.id)}
+                      className={`flex items-center gap-3 rounded-xl border p-3 text-left ${checked ? "border-[#e3262e] bg-[#e3262e]/10" : "border-white/10 bg-zinc-950"}`}
+                    >
+                      <img
+                        src={p.image_url || ""}
+                        className="h-12 w-12 rounded-lg bg-white object-cover"
+                      />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-black">{p.name}</p>
+                        <p className="text-[10px] uppercase text-zinc-500">
+                          {p.brand} · {p.category}
+                        </p>
+                        <p className="mt-1 text-xs font-bold">
+                          S/ {Number(p.price).toFixed(2)}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="mt-5 flex gap-2">
+              <button
+                disabled={saving || uploading}
+                onClick={save}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#e3262e] px-4 py-2.5 text-sm font-black"
+              >
+                <Save size={16} />
+                {saving ? "Guardando..." : "Guardar combo"}
+              </button>
+            </div>
+          </section>
+        )}
+        <section className="overflow-hidden rounded-2xl border border-white/10 bg-zinc-900">
+          {items.length === 0 ? (
+            <p className="p-8 text-center text-zinc-500">
+              No hay combos creados.
+            </p>
+          ) : (
+            <div className="divide-y divide-white/10">
+              {items.map((c) => (
+                <article
+                  key={c.id}
+                  className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex items-center gap-3">
+                    {c.image_url ? (
+                      <img
+                        src={c.image_url}
+                        className="h-16 w-24 rounded-lg object-cover"
+                      />
+                    ) : (
+                      <div className="h-16 w-24 rounded-lg bg-zinc-800" />
+                    )}
+                    <div>
+                      <p className="text-[10px] font-black uppercase text-[#e3262e]">
+                        {c.is_active ? "Activo" : "Oculto"} ·{" "}
+                        {Array.isArray(c.product_ids)
+                          ? c.product_ids.length
+                          : 0}{" "}
+                        productos
+                      </p>
+                      <h3 className="mt-1 font-black">{c.title}</h3>
+                      {c.combo_price != null && (
+                        <p className="mt-1 text-sm text-zinc-400">
+                          S/ {Number(c.combo_price).toFixed(2)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => edit(c)}
+                      className="grid h-9 w-9 place-items-center rounded-lg border border-white/10"
+                    >
+                      <Edit3 size={16} />
+                    </button>
+                    <button
+                      onClick={() => remove(c.id)}
+                      className="grid h-9 w-9 place-items-center rounded-lg border border-red-500/20 text-red-400"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
+        </section>
+      </div>
+    </main>
+  );
 }

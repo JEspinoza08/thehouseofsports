@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Edit, LogOut, Package, Plus, Search, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Download, Edit, LogOut, Package, Plus, Search, Trash2 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 import { AdminProduct, ProductFormValues } from "../../lib/adminTypes";
 import AdminProductForm from "./AdminProductForm";
 import AdminNav from "../../components/AdminNav";
+import { exportGroupedProductsToExcel } from "../../lib/exportExcel";
 
 const emptyProduct: ProductFormValues = {
+  sku_code: "",
   name: "",
   brand: "POKER",
   category: "guantes",
@@ -40,6 +42,7 @@ export default function AdminDashboard() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [editing, setEditing] = useState<ProductFormValues | null>(null);
+  const [expandedProducts, setExpandedProducts] = useState<Set<string | number>>(new Set());
 
   const loadProducts = async () => {
     setLoading(true);
@@ -70,7 +73,7 @@ export default function AdminDashboard() {
     const q = query.trim().toLowerCase();
     if (!q) return products;
     return products.filter((p) =>
-      [p.name, p.brand, p.category, p.label].some((v) =>
+      [p.sku_code, p.name, p.brand, p.category, p.label].some((v) =>
         String(v).toLowerCase().includes(q),
       ),
     );
@@ -78,6 +81,25 @@ export default function AdminDashboard() {
 
   const totalStock = products.reduce((sum, p) => sum + Number(p.stock || 0), 0);
   const lowStock = products.filter((p) => Number(p.stock || 0) <= 3).length;
+
+
+
+  const toggleProductExpanded = (productId: string | number) => {
+    setExpandedProducts((current) => {
+      const next = new Set(current);
+      if (next.has(productId)) next.delete(productId);
+      else next.add(productId);
+      return next;
+    });
+  };
+
+  const handleExportProducts = () => {
+    exportGroupedProductsToExcel(
+      filteredProducts,
+      `ths-productos-${new Date().toISOString().slice(0, 10)}`,
+      "Productos",
+    );
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -96,6 +118,7 @@ export default function AdminDashboard() {
     const variants = values.product_variants || [];
 
     const payload = {
+      sku_code: String(values.sku_code || "").trim().toUpperCase(),
       name: values.name,
       brand: values.brand,
       category: values.category,
@@ -263,6 +286,14 @@ export default function AdminDashboard() {
           </div>
           <div className="flex flex-wrap gap-2">
             <button
+              type="button"
+              onClick={handleExportProducts}
+              className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-3 py-2 text-sm font-bold text-emerald-300 transition hover:bg-emerald-500/20"
+            >
+              <Download size={16} />
+              Exportar Excel
+            </button>
+            <button
               onClick={() => setEditing(emptyProduct)}
               className="inline-flex items-center gap-2 rounded-lg bg-[#e3262e] px-3 py-2 text-sm font-bold text-white transition hover:bg-[#d83f20]"
             >
@@ -325,7 +356,7 @@ export default function AdminDashboard() {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar por nombre, marca o categoría..."
+            placeholder="Buscar por código SKU, nombre, marca o categoría..."
             className="w-full rounded-xl border border-white/10 bg-zinc-900 py-2.5 pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-[#e3262e]"
           />
         </div>
@@ -350,107 +381,103 @@ export default function AdminDashboard() {
               <table className="w-full text-sm">
                 <thead className="bg-white/[0.04] text-[11px] uppercase tracking-wide text-gray-400">
                   <tr>
-                    <th className="px-3 py-3 text-left">Producto</th>
-                    <th className="px-3 py-3 text-left">Precio</th>
+                    <th className="px-3 py-3 text-left">Código SKU</th>
+                    <th className="px-3 py-3 text-left">Variante</th>
+                    <th className="px-3 py-3 text-left">Nombre</th>
                     <th className="px-3 py-3 text-left">Stock</th>
-                    <th className="px-3 py-3 text-left">Estado</th>
+                    <th className="px-3 py-3 text-left">Precio</th>
+                    <th className="px-3 py-3 text-left">Activo</th>
                     <th className="px-3 py-3 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/10">
-                  {filteredProducts.map((product) => (
-                    <tr
-  key={product.id}
-  className="transition hover:bg-white/[0.035]"
->
-                      <td className="min-w-[210px] px-3 py-2.5">
-  <div className="flex min-w-0 items-center gap-2.5">
-    {product.image_url ? (
-      <img
-        src={product.image_url}
-        alt={product.name}
-        className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain"
-      />
-    ) : (
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-800">
-        <Package size={16} />
-      </div>
-    )}
+                  {filteredProducts.map((product) => {
+                    const variants = product.has_variants && product.product_variants?.length
+                      ? product.product_variants
+                      : [];
+                    const isExpanded = expandedProducts.has(product.id);
 
-    <div className="min-w-0">
-      <p
-        className="truncate text-sm font-semibold leading-5 text-white"
-        title={product.name}
-      >
-        {product.name}
-      </p>
+                    return (
+                      <Fragment key={product.id}>
+                        <tr className="transition hover:bg-white/[0.035]">
+                          <td className="whitespace-nowrap px-3 py-2.5 font-mono text-xs font-bold text-[#ff6268]">
+                            {product.sku_code || "—"}
+                          </td>
+                          <td className="min-w-[170px] px-3 py-2.5 text-xs text-zinc-300">
+                            {variants.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleProductExpanded(product.id)}
+                                className="inline-flex items-center gap-2 rounded-lg px-2 py-1.5 font-bold text-white transition hover:bg-white/5"
+                              >
+                                {isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                                {variants.length} {variants.length === 1 ? "variante" : "variantes"}
+                              </button>
+                            ) : (
+                              <span className="text-zinc-500">Sin variantes</span>
+                            )}
+                          </td>
+                          <td className="min-w-[230px] px-3 py-2.5">
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              {product.image_url ? (
+                                <img src={product.image_url} alt={product.name} className="h-10 w-10 shrink-0 rounded-lg bg-white object-contain" />
+                              ) : (
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-zinc-800"><Package size={16} /></div>
+                              )}
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold leading-5 text-white" title={product.name}>{product.name}</p>
+                                <p className="truncate text-[11px] capitalize text-gray-500">{product.brand} · {product.category}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <span className={`text-sm font-black ${Number(product.stock) <= 3 ? "text-red-400" : "text-emerald-400"}`}>
+                              {product.stock}
+                            </span>
+                          </td>
+                          <td className="whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-white">S/{Number(product.price).toLocaleString("es-PE")}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold uppercase ${product.is_active ? "bg-emerald-500/10 text-emerald-300" : "bg-gray-500/10 text-gray-400"}`}>
+                              <span className={`h-1.5 w-1.5 rounded-full ${product.is_active ? "bg-emerald-400" : "bg-gray-500"}`} />
+                              {product.is_active ? "Sí" : "No"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex justify-end gap-1.5">
+                              <button onClick={() => setEditing(product)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-300 transition hover:bg-white/10 hover:text-white" title="Editar"><Edit size={14} /></button>
+                              <button onClick={() => handleDelete(product)} className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-300 transition hover:bg-red-500/20" title="Eliminar"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        </tr>
 
-      <p className="truncate text-[11px] capitalize text-gray-500">
-        {product.brand} · {product.category}
-      </p>
-    </div>
-  </div>
-</td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-sm font-semibold text-white">
-  S/{Number(product.price).toLocaleString("es-PE")}
-</td>
-                      <td className="px-3 py-2.5">
-  <div className="flex flex-col items-start gap-1">
-    <span
-      className={`text-sm font-black ${
-        Number(product.stock) <= 3
-          ? "text-red-400"
-          : "text-emerald-400"
-      }`}
-    >
-      {product.stock}
-    </span>
-
-    {product.has_variants && (
-      <span className="rounded-full bg-blue-500/10 px-2 py-0.5 text-[9px] font-bold uppercase text-blue-300">
-        Variantes
-      </span>
-    )}
-  </div>
-</td>
-                      <td className="px-3 py-2.5">
-  <span
-    className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold uppercase ${
-      product.is_active
-        ? "bg-emerald-500/10 text-emerald-300"
-        : "bg-gray-500/10 text-gray-400"
-    }`}
-  >
-    <span
-      className={`h-1.5 w-1.5 rounded-full ${
-        product.is_active ? "bg-emerald-400" : "bg-gray-500"
-      }`}
-    />
-
-    {product.is_active ? "Activo" : "Oculto"}
-  </span>
-</td>
-                      <td className="px-3 py-2.5">
-  <div className="flex justify-end gap-1.5">
-    <button
-      onClick={() => setEditing(product)}
-      className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/5 text-gray-300 transition hover:bg-white/10 hover:text-white"
-      title="Editar"
-    >
-      <Edit size={14} />
-    </button>
-
-    <button
-      onClick={() => handleDelete(product)}
-      className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-500/10 text-red-300 transition hover:bg-red-500/20"
-      title="Eliminar"
-    >
-      <Trash2 size={14} />
-    </button>
-  </div>
-</td>
-                    </tr>
-                  ))}
+                        {isExpanded && variants.map((variant) => (
+                          <tr key={variant.id} className="bg-black/20 text-xs">
+                            <td className="px-3 py-2.5 font-mono text-[11px] text-zinc-600">↳ {product.sku_code || "—"}</td>
+                            <td className="px-3 py-2.5">
+                              <div className="flex flex-col gap-0.5 pl-6">
+                                <span className="font-bold text-zinc-200">{variant.variant_value}</span>
+                                {variant.color_name && <span className="text-zinc-500">{variant.color_name}</span>}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2.5 text-zinc-500">Variante de {product.name}</td>
+                            <td className="px-3 py-2.5">
+                              <span className={`font-black ${Number(variant.stock) <= 3 ? "text-red-400" : "text-emerald-400"}`}>
+                                {variant.stock}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 font-semibold text-zinc-300">S/{Number(product.price).toLocaleString("es-PE")}</td>
+                            <td className="px-3 py-2.5">
+                              <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold uppercase ${variant.is_active ? "bg-emerald-500/10 text-emerald-300" : "bg-gray-500/10 text-gray-400"}`}>
+                                <span className={`h-1.5 w-1.5 rounded-full ${variant.is_active ? "bg-emerald-400" : "bg-gray-500"}`} />
+                                {variant.is_active ? "Sí" : "No"}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 text-right text-[11px] text-zinc-600">—</td>
+                          </tr>
+                        ))}
+                      </Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

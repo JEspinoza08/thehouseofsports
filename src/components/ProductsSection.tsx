@@ -15,7 +15,7 @@ interface ProductsSectionProps {
 const allCategories: { id: Category; label: string }[] = [
   { id: "guantes", label: "Guantes" },
   { id: "zapatillas", label: "Zapatillas" },
-  { id: "rodilleras", label: "Rodilleras" },
+  { id: "protecciones", label: "Protecciones" },
   { id: "accesorios", label: "Accesorios" },
   { id: "ropa", label: "Ropa" },
 ];
@@ -24,7 +24,7 @@ const filterMeta: Record<string, { key: string; label: string }> = {
   guantes: { key: "latex_type", label: "Tipo de látex" },
   zapatillas: { key: "sole_type", label: "Tipo de suela" },
   accesorios: { key: "protection_model", label: "Tipo de modelo" },
-  rodilleras: { key: "protection_model", label: "Tipo de modelo" },
+  protecciones: { key: "protection_model", label: "Tipo de modelo" },
 };
 
 export default function ProductsSection({

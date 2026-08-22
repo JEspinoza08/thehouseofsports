@@ -238,6 +238,7 @@ export default function AdminProductForm({ product, onClose, onSave }: Props) {
         </div>
 
         <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Código SKU"><input value={values.sku_code || ""} onChange={(e) => setField("sku_code", e.target.value.toUpperCase())} required placeholder="Ej: THS-GUA-001" className="input-admin font-mono uppercase" /></Field>
           <Field label="Nombre"><input value={values.name} onChange={(e) => setField("name", e.target.value)} required className="input-admin" /></Field>
           <Field label="Marca">
             <select value={values.brand} onChange={(e) => setField("brand", e.target.value)} className="input-admin" required>

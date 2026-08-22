@@ -18,14 +18,19 @@ import CartDrawer from "./CartDrawer";
 import GoalkeeperCartAnimation from "./GoalkeeperCartAnimation";
 import { supabase } from "../lib/supabase";
 
-type NavLinkItem = { label: string; href: string; accent?: boolean; dropdown?: boolean };
+type NavLinkItem = {
+  label: string;
+  href: string;
+  accent?: boolean;
+  dropdown?: boolean;
+};
 
 const fallbackCategoryLinks: NavLinkItem[] = [
   { label: "Guantes de arquero", href: "/guantes" },
-  { label: "Calzado de fútbol", href: "/zapatillas" },
-  { label: "Rodilleras", href: "/categoria/rodilleras" },
-  { label: "Accesorios", href: "/accesorios" },
+  { label: "Chimpunes", href: "/zapatillas" },
+  { label: "Protecciones", href: "/categoria/protecciones" },
   { label: "Ropa deportiva", href: "/ropa" },
+  { label: "Accesorios", href: "/accesorios" },
 ];
 
 interface HeaderProps {
@@ -37,7 +42,9 @@ export default function Header({ onSearch }: HeaderProps) {
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
   const [cartOpen, setCartOpen] = useState(false);
-  const [categoryLinks, setCategoryLinks] = useState<NavLinkItem[]>(fallbackCategoryLinks);
+  const [categoryLinks, setCategoryLinks] = useState<NavLinkItem[]>(
+    fallbackCategoryLinks,
+  );
 
   useEffect(() => {
     supabase
@@ -50,8 +57,19 @@ export default function Header({ onSearch }: HeaderProps) {
         if (!error && data?.length) {
           setCategoryLinks(
             data.slice(0, 6).map((row: any) => ({
-              label: ({ guantes: "Guantes de arquero", zapatillas: "Calzado de fútbol", rodilleras: "Rodilleras", ropa: "Ropa deportiva", accesorios: "Accesorios" } as Record<string,string>)[row.slug] || row.name,
-              href: ["guantes", "zapatillas", "ropa", "accesorios"].includes(row.slug)
+              label:
+                (
+                  {
+                    guantes: "Guantes de arquero",
+                    zapatillas: "Chimpunes",
+                    protecciones: "Protecciones",
+                    ropa: "Ropa deportiva",
+                    accesorios: "Accesorios",
+                  } as Record<string, string>
+                )[row.slug] || row.name,
+              href: ["guantes", "zapatillas", "ropa", "accesorios"].includes(
+                row.slug,
+              )
                 ? `/${row.slug}`
                 : `/categoria/${row.slug}`,
             })),
@@ -62,10 +80,10 @@ export default function Header({ onSearch }: HeaderProps) {
 
   const navLinks: NavLinkItem[] = [
     { label: "Inicio", href: "/" },
-    ...categoryLinks,
-    { label: "Marcas", href: "/marcas" },
     { label: "Ofertas", href: "/ofertas", accent: true },
+    ...categoryLinks,
     { label: "Blog", href: "/blog" },
+    { label: "Marcas", href: "/marcas" },
     { label: "Contacto", href: "/contacto" },
   ];
 
@@ -138,19 +156,19 @@ export default function Header({ onSearch }: HeaderProps) {
         {/* MAIN HEADER */}
         <div className="padel-container flex h-[82px] items-center gap-4 sm:gap-5 lg:h-[108px] lg:gap-10">
           {/* LOGO */}
-<Link
-  to="/"
-  className="
+          <Link
+            to="/"
+            className="
     flex shrink-0 items-center
     lg:w-[12rem]
     xl:w-[12rem]
   "
-  aria-label="The House of Sports"
->
-  <img
-    src={logo}
-    alt="The House of Sports"
-    className="
+            aria-label="The House of Sports"
+          >
+            <img
+              src={logo}
+              alt="The House of Sports"
+              className="
       h-auto
       w-28
       object-contain
@@ -162,8 +180,8 @@ export default function Header({ onSearch }: HeaderProps) {
 
       xl:scale-[1.55]
     "
-  />
-</Link>
+            />
+          </Link>
 
           {/* DESKTOP SEARCH */}
           <form
@@ -201,9 +219,7 @@ export default function Header({ onSearch }: HeaderProps) {
 
             {/* ACCOUNT */}
             <button
-              onClick={() =>
-                navigate(user ? "/mi-cuenta" : "/login")
-              }
+              onClick={() => navigate(user ? "/mi-cuenta" : "/login")}
               className="flex items-center gap-3 text-left transition hover:text-[#e3262e]"
             >
               <User size={25} strokeWidth={1.55} />
@@ -229,9 +245,7 @@ export default function Header({ onSearch }: HeaderProps) {
               <ShoppingCart size={25} strokeWidth={1.55} />
 
               <span className="hidden lg:block">
-                <span className="block text-[12px] font-black">
-                  Carrito
-                </span>
+                <span className="block text-[12px] font-black">Carrito</span>
 
                 <span className="mt-0.5 block text-[10px] text-white/50">
                   {totalItems} producto
@@ -297,12 +311,7 @@ export default function Header({ onSearch }: HeaderProps) {
                 >
                   {link.label}
 
-                  {link.dropdown && (
-                    <ChevronDown
-                      size={13}
-                      strokeWidth={1.8}
-                    />
-                  )}
+                  {link.dropdown && <ChevronDown size={13} strokeWidth={1.8} />}
                 </button>
               );
             })}
@@ -333,10 +342,7 @@ export default function Header({ onSearch }: HeaderProps) {
 
       <GoalkeeperCartAnimation />
 
-      <CartDrawer
-        open={cartOpen}
-        onClose={() => setCartOpen(false)}
-      />
+      <CartDrawer open={cartOpen} onClose={() => setCartOpen(false)} />
     </>
   );
 }

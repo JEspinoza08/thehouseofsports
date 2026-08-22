@@ -108,7 +108,7 @@ export const products: Product[] = [
 export const categories = [
   { id: "guantes", label: "Guantes", icon: "🧤", image: categoria1 },
   { id: "zapatillas", label: "Zapatillas", icon: "👟", image: categoria2 },
-  { id: "rodilleras", label: "Rodilleras", icon: "🛡️", image: categoria3 },
+  { id: "protecciones", label: "Protecciones", icon: "🛡️", image: categoria3 },
   { id: "accesorios", label: "Accesorios", icon: "⚽", image: categoria4 },
   { id: "ropa", label: "Ropa", icon: "👕", image: categoria5 },
 ];

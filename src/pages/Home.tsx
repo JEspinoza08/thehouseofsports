@@ -57,8 +57,8 @@ const [selectedBrand] = useState<string>("");
       />
       <ComboSection />
       <BlogHighlights />
-      <BrandFinder />
       <Trust />
+      <BrandFinder />
       <Contact />
       <Footer />
       {selectedProduct && (
