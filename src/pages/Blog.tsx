@@ -1,0 +1,12 @@
+import { useEffect, useState } from "react";
+import { ArrowRight, CalendarDays } from "lucide-react";
+import { Link } from "react-router-dom";
+import { supabase } from "../lib/supabase";
+import Header from "../components/Header";
+import Footer from "../components/Footer";
+
+export default function Blog() {
+  const [posts, setPosts] = useState<any[]>([]);
+  useEffect(() => { supabase.from("blog_posts").select("id,slug,title,excerpt,cover_image_url,category,published_at").eq("status","published").order("published_at",{ascending:false}).then(({data})=>setPosts(data??[])); }, []);
+  return <div className="min-h-screen bg-neutral-50"><Header onSearch={()=>{}}/><main className="padel-container py-10 lg:py-14"><p className="text-[11px] font-black uppercase tracking-[.14em] text-[#e3262e]">THS Journal</p><h1 className="mt-2 text-4xl font-black uppercase italic tracking-[-.05em] lg:text-5xl">Noticias, reseñas y novedades</h1><p className="mt-4 max-w-2xl text-sm leading-7 text-neutral-600">Noticias, lanzamientos, tecnología, reseñas y contenido para conocer mejor el equipamiento que llevas a la cancha.</p><div className="mt-9 grid gap-5 md:grid-cols-2 lg:grid-cols-3">{posts.map((post)=><Link to={`/blog/${post.slug}`} key={post.id} className="group overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-xl"><div className="aspect-[16/10] overflow-hidden bg-neutral-100">{post.cover_image_url && <img src={post.cover_image_url} alt={post.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105"/>}</div><div className="p-5"><div className="flex items-center gap-2 text-[10px] font-black uppercase text-[#e3262e]"><span>{post.category || "Novedades"}</span>{post.published_at && <><span>·</span><CalendarDays size={12}/><span>{new Date(post.published_at).toLocaleDateString("es-PE")}</span></>}</div><h2 className="mt-3 text-xl font-black leading-tight">{post.title}</h2><p className="mt-3 line-clamp-3 text-sm leading-6 text-neutral-600">{post.excerpt}</p><span className="mt-5 inline-flex items-center gap-2 text-xs font-black uppercase">Leer artículo <ArrowRight size={14}/></span></div></Link>)}</div>{posts.length===0&&<div className="mt-10 rounded-2xl border border-dashed border-neutral-300 bg-white p-10 text-center text-neutral-500">Pronto publicaremos nuevas noticias y reseñas.</div>}</main><Footer/></div>;
+}
